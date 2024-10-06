@@ -4,7 +4,7 @@ import { OrbitControls } from '@react-three/drei';
 import * as THREE from 'three';
 
 interface TorusViewProps {
-  cells: boolean[];
+  cells: number[];
   gridSize: number;
   hoveredCell: { x: number; y: number } | null;
 }

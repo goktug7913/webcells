@@ -11,22 +11,21 @@ import styles from './page.module.css';
 import InitialConfigTool from './components/InitialConfigTool';
 import { InitialConfigType } from './components/InitialConfigTool';
 
-// Remove the unused GameOfLifeProps interface
-
 export default function Home() {
   const [entropyHistory, setEntropyHistory] = useState<number[]>([]);
-  const [gridSize, setGridSize] = useState(50);
+  const [gridSize, setGridSize] = useState(100);
   const [speed, setSpeed] = useState(10);
-  const [cells, setCells] = useState<boolean[]>([]);
+  const [cells, setCells] = useState<number[]>([]);  // Changed from boolean[] to number[]
   const [stats, setStats] = useState({ entropy: 0, aliveRatio: 0, patternComplexity: 0, spatialEntropy: 0 });
-  const [initialConfig, setInitialConfig] = useState<'random' | 'glider' | 'empty'>('random');
+  const [initialConfig, setInitialConfig] = useState<InitialConfigType>('random');
   const [hoveredCell, setHoveredCell] = useState<{ x: number; y: number } | null>(null);
+  const [injectEntropyFn, setInjectEntropyFn] = useState<() => void>(() => {});
 
   const handleEntropyChange = useCallback((entropy: number) => {
     setEntropyHistory(prev => [...prev, entropy].slice(-100));
   }, []);
 
-  const handleCellsUpdate = useCallback((newCells: boolean[]) => {
+  const handleCellsUpdate = useCallback((newCells: number[]) => {  // Changed from boolean[] to number[]
     setCells(newCells);
   }, []);
 
@@ -46,54 +45,53 @@ export default function Home() {
     }
   }, []);
 
+  const handleInjectEntropy = useCallback(() => {
+    injectEntropyFn();
+  }, [injectEntropyFn]);
+
   return (
     <main className={styles.main}>
-      <div className="container">
-        <h1 className="title">Conway&apos;s Game of Life: Toroidal Edition</h1>
-        <div className={styles.content}>
-          <div className={styles.leftPanel}>
-            <div className="panel">
-              <ControlPanel
+      <div className={styles.content}>
+        <div className={styles.leftPanel}>
+          <ControlPanel
+            gridSize={gridSize}
+            setGridSize={setGridSize}
+            speed={speed}
+            setSpeed={setSpeed}
+            onInjectEntropy={handleInjectEntropy}
+          />
+          <InitialConfigTool onConfigurationSet={handleInitialConfigSet} />
+        </div>
+        <div className={styles.centerPanel}>
+          <div className={styles.canvasContainer}>
+            <Canvas>
+              <color attach="background" args={['#001a00']} />
+              <OrthographicCamera makeDefault position={[0, 0, 10]} zoom={40} />
+              <GameOfLife
                 gridSize={gridSize}
-                setGridSize={setGridSize}
                 speed={speed}
-                setSpeed={setSpeed}
+                onEntropyChange={handleEntropyChange}
+                onCellsUpdate={handleCellsUpdate}
+                onStatsUpdate={handleStatsUpdate}
+                initialConfig={initialConfig}
+                onHover={handleHover}
+                onInjectEntropy={(fn: () => void) => setInjectEntropyFn(() => fn)}
               />
-            </div>
-            <div className="panel">
-              <EntropyStats {...stats} />
-            </div>
-            <div className="panel">
-              <InitialConfigTool onConfigurationSet={handleInitialConfigSet} />
-            </div>
+            </Canvas>
           </div>
-          <div className={styles.centerPanel}>
-            <div className={styles.canvasContainer}>
-              <Canvas>
-                <color attach="background" args={['#000000']} />
-                <OrthographicCamera makeDefault position={[0, 0, 10]} zoom={40} />
-                <GameOfLife
-                  gridSize={gridSize}
-                  speed={speed}
-                  onEntropyChange={handleEntropyChange}
-                  onCellsUpdate={handleCellsUpdate}
-                  onStatsUpdate={handleStatsUpdate}
-                  initialConfig={initialConfig}
-                  onHover={handleHover}
-                />
-              </Canvas>
-            </div>
+          <div className={styles.graphContainer}>
             <EntropyGraph entropyHistory={entropyHistory} />
           </div>
-          <div className={styles.rightPanel}>
-            <div className={styles.torusContainer}>
-              <Canvas>
-                <color attach="background" args={['#000000']} />
-                <PerspectiveCamera makeDefault position={[0, 0, 3]} />
-                <TorusView cells={cells} gridSize={gridSize} hoveredCell={hoveredCell} />
-              </Canvas>
-            </div>
+        </div>
+        <div className={styles.rightPanel}>
+          <div className={styles.torusContainer}>
+            <Canvas>
+              <color attach="background" args={['#001a00']} />
+              <PerspectiveCamera makeDefault position={[0, 0, 3]} />
+              <TorusView cells={cells} gridSize={gridSize} hoveredCell={hoveredCell} />
+            </Canvas>
           </div>
+          <EntropyStats {...stats} />
         </div>
       </div>
     </main>
