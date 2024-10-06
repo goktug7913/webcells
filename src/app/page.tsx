@@ -1,95 +1,101 @@
-import Image from "next/image";
-import styles from "./page.module.css";
+'use client';
+import { useState, useCallback } from 'react';
+import { Canvas } from "@react-three/fiber";
+import { OrthographicCamera, PerspectiveCamera } from "@react-three/drei";
+import GameOfLife from "./components/GameOfLife";
+import EntropyGraph from "./components/EntropyGraph";
+import ControlPanel from "./components/ControlPanel";
+import TorusView from "./components/TorusView";
+import EntropyStats from "./components/EntropyStats";
+import styles from './page.module.css';
+import InitialConfigTool from './components/InitialConfigTool';
+import { InitialConfigType } from './components/InitialConfigTool';
+
+// Remove the unused GameOfLifeProps interface
 
 export default function Home() {
-  return (
-    <div className={styles.page}>
-      <main className={styles.main}>
-        <Image
-          className={styles.logo}
-          src="https://nextjs.org/icons/next.svg"
-          alt="Next.js logo"
-          width={180}
-          height={38}
-          priority
-        />
-        <ol>
-          <li>
-            Get started by editing <code>src/app/page.tsx</code>.
-          </li>
-          <li>Save and see your changes instantly.</li>
-        </ol>
+  const [entropyHistory, setEntropyHistory] = useState<number[]>([]);
+  const [gridSize, setGridSize] = useState(50);
+  const [speed, setSpeed] = useState(10);
+  const [cells, setCells] = useState<boolean[]>([]);
+  const [stats, setStats] = useState({ entropy: 0, aliveRatio: 0, patternComplexity: 0, spatialEntropy: 0 });
+  const [initialConfig, setInitialConfig] = useState<'random' | 'glider' | 'empty'>('random');
+  const [hoveredCell, setHoveredCell] = useState<{ x: number; y: number } | null>(null);
 
-        <div className={styles.ctas}>
-          <a
-            className={styles.primary}
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className={styles.logo}
-              src="https://nextjs.org/icons/vercel.svg"
-              alt="Vercel logomark"
-              width={20}
-              height={20}
-            />
-            Deploy now
-          </a>
-          <a
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-            className={styles.secondary}
-          >
-            Read our docs
-          </a>
+  const handleEntropyChange = useCallback((entropy: number) => {
+    setEntropyHistory(prev => [...prev, entropy].slice(-100));
+  }, []);
+
+  const handleCellsUpdate = useCallback((newCells: boolean[]) => {
+    setCells(newCells);
+  }, []);
+
+  const handleStatsUpdate = useCallback((newStats: { entropy: number; aliveRatio: number; patternComplexity: number; spatialEntropy: number }) => {
+    setStats(newStats);
+  }, []);
+
+  const handleInitialConfigSet = useCallback((newConfig: InitialConfigType) => {
+    setInitialConfig(newConfig);
+  }, []);
+
+  const handleHover = useCallback((x: number, y: number | null) => {
+    if (x >= 0 && y !== null && y >= 0) {
+      setHoveredCell({ x, y });
+    } else {
+      setHoveredCell(null);
+    }
+  }, []);
+
+  return (
+    <main className={styles.main}>
+      <div className="container">
+        <h1 className="title">Conway&apos;s Game of Life: Toroidal Edition</h1>
+        <div className={styles.content}>
+          <div className={styles.leftPanel}>
+            <div className="panel">
+              <ControlPanel
+                gridSize={gridSize}
+                setGridSize={setGridSize}
+                speed={speed}
+                setSpeed={setSpeed}
+              />
+            </div>
+            <div className="panel">
+              <EntropyStats {...stats} />
+            </div>
+            <div className="panel">
+              <InitialConfigTool onConfigurationSet={handleInitialConfigSet} />
+            </div>
+          </div>
+          <div className={styles.centerPanel}>
+            <div className={styles.canvasContainer}>
+              <Canvas>
+                <color attach="background" args={['#000000']} />
+                <OrthographicCamera makeDefault position={[0, 0, 10]} zoom={40} />
+                <GameOfLife
+                  gridSize={gridSize}
+                  speed={speed}
+                  onEntropyChange={handleEntropyChange}
+                  onCellsUpdate={handleCellsUpdate}
+                  onStatsUpdate={handleStatsUpdate}
+                  initialConfig={initialConfig}
+                  onHover={handleHover}
+                />
+              </Canvas>
+            </div>
+            <EntropyGraph entropyHistory={entropyHistory} />
+          </div>
+          <div className={styles.rightPanel}>
+            <div className={styles.torusContainer}>
+              <Canvas>
+                <color attach="background" args={['#000000']} />
+                <PerspectiveCamera makeDefault position={[0, 0, 3]} />
+                <TorusView cells={cells} gridSize={gridSize} hoveredCell={hoveredCell} />
+              </Canvas>
+            </div>
+          </div>
         </div>
-      </main>
-      <footer className={styles.footer}>
-        <a
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="https://nextjs.org/icons/file.svg"
-            alt="File icon"
-            width={16}
-            height={16}
-          />
-          Learn
-        </a>
-        <a
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="https://nextjs.org/icons/window.svg"
-            alt="Window icon"
-            width={16}
-            height={16}
-          />
-          Examples
-        </a>
-        <a
-          href="https://nextjs.org?utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="https://nextjs.org/icons/globe.svg"
-            alt="Globe icon"
-            width={16}
-            height={16}
-          />
-          Go to nextjs.org →
-        </a>
-      </footer>
-    </div>
+      </div>
+    </main>
   );
 }
