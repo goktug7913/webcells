@@ -15,14 +15,14 @@ interface GameOfLifeProps {
     onInjectEntropy: (fn: () => void) => void;
 }
 
-const GameOfLife: React.FC<GameOfLifeProps> = ({ 
-    gridSize, 
-    speed, 
-    onEntropyChange, 
-    onCellsUpdate, 
-    onStatsUpdate, 
-    initialConfig = 'random', 
-    onHover, 
+const GameOfLife: React.FC<GameOfLifeProps> = ({
+    gridSize,
+    speed,
+    onEntropyChange,
+    onCellsUpdate,
+    onStatsUpdate,
+    initialConfig = 'random',
+    onHover,
     onInjectEntropy
 }) => {
     const meshRef = useRef<THREE.InstancedMesh>(null);
@@ -54,23 +54,18 @@ const GameOfLife: React.FC<GameOfLifeProps> = ({
     }, [initializeGrid]);
 
     const getNeighborhood = useCallback((x: number, y: number, innerRadius: number, outerRadius: number) => {
-        let innerSum = 0;
         let outerSum = 0;
-        let innerCount = 0;
         let outerCount = 0;
 
         for (let dy = -outerRadius; dy <= outerRadius; dy++) {
             for (let dx = -outerRadius; dx <= outerRadius; dx++) {
-                const distance = Math.sqrt(dx*dx + dy*dy);
+                const distance = Math.sqrt(dx * dx + dy * dy);
                 if (distance <= outerRadius) {
                     const nx = (x + dx + gridSize) % gridSize;
                     const ny = (y + dy + gridSize) % gridSize;
                     const value = cells[ny * gridSize + nx];
-                    
-                    if (distance <= innerRadius) {
-                        innerSum += value;
-                        innerCount++;
-                    } else {
+
+                    if (distance > innerRadius) {
                         outerSum += value;
                         outerCount++;
                     }
@@ -79,8 +74,7 @@ const GameOfLife: React.FC<GameOfLifeProps> = ({
         }
 
         return {
-            innerAvg: innerSum / innerCount,
-            outerAvg: outerSum / outerCount
+            outerAvg: outerCount === 0 ? 0 : outerSum / outerCount
         };
     }, [cells, gridSize]);
 
@@ -97,7 +91,7 @@ const GameOfLife: React.FC<GameOfLifeProps> = ({
             for (let y = 0; y < gridSize; y++) {
                 for (let x = 0; x < gridSize; x++) {
                     const i = y * gridSize + x;
-                    const { innerAvg, outerAvg } = getNeighborhood(x, y, innerRadius, outerRadius);
+                    const { outerAvg } = getNeighborhood(x, y, innerRadius, outerRadius);
                     const s = outerAvg;
                     // Removed unused 'm' variable
                     let n = 0;
@@ -118,7 +112,9 @@ const GameOfLife: React.FC<GameOfLifeProps> = ({
     const calculateStats = useCallback(() => {
         const aliveCells = cells.reduce((sum, cell) => sum + cell, 0);
         const aliveRatio = aliveCells / (gridSize * gridSize);
-        const entropy = -aliveRatio * Math.log2(aliveRatio) - (1 - aliveRatio) * Math.log2(1 - aliveRatio);
+        const entropy = (aliveRatio === 0 || aliveRatio === 1)
+            ? 0
+            : -aliveRatio * Math.log2(aliveRatio) - (1 - aliveRatio) * Math.log2(1 - aliveRatio);
         const patternComplexity = calculatePatternComplexity(Array.from(cells).map(Boolean), gridSize);
         const spatialEntropy = calculateSpatialEntropy(Array.from(cells).map(Boolean), gridSize);
 
@@ -147,14 +143,6 @@ const GameOfLife: React.FC<GameOfLifeProps> = ({
             onHover(-1, -1);
         }
     }, [raycaster, camera, gridSize, onHover]);
-
-    useEffect(() => {
-        const canvas = document.querySelector('canvas');
-        canvas?.addEventListener('pointermove', handlePointerMove);
-        return () => {
-            canvas?.removeEventListener('pointermove', handlePointerMove);
-        };
-    }, [handlePointerMove]);
 
     const injectEntropy = useCallback(() => {
         setCells(prevCells => {
@@ -185,27 +173,30 @@ const GameOfLife: React.FC<GameOfLifeProps> = ({
         onStatsUpdate(stats);
         onEntropyChange(stats.entropy);
 
-        updateMesh();
+        updateMesh(newCells);
     });
 
-    const updateMesh = useCallback(() => {
-        if (!meshRef.current) return;
+    const updateMesh = useCallback(
+        (cellsData: Float32Array = cells) => {
+            if (!meshRef.current) return;
 
-        const tempObject = new THREE.Object3D();
-        const tempColor = new THREE.Color();
-        for (let i = 0; i < gridSize * gridSize; i++) {
-            const x = (i % gridSize) * cellSize - (gridSize * cellSize) / 2;
-            const y = Math.floor(i / gridSize) * cellSize - (gridSize * cellSize) / 2;
-            tempObject.position.set(x, y, 0);
-            tempObject.scale.set(1, 1, 1);  // Always show all cells
-            tempObject.updateMatrix();
-            meshRef.current.setMatrixAt(i, tempObject.matrix);
-            tempColor.setHSL(0.3, 1, cells[i] * 0.5);  // Adjust color based on cell state
-            meshRef.current.setColorAt(i, tempColor);
-        }
-        meshRef.current.instanceMatrix.needsUpdate = true;
-        if (meshRef.current.instanceColor) meshRef.current.instanceColor.needsUpdate = true;
-    }, [gridSize, cellSize, cells]);
+            const tempObject = new THREE.Object3D();
+            const tempColor = new THREE.Color();
+            for (let i = 0; i < gridSize * gridSize; i++) {
+                const x = (i % gridSize) * cellSize - (gridSize * cellSize) / 2;
+                const y = Math.floor(i / gridSize) * cellSize - (gridSize * cellSize) / 2;
+                tempObject.position.set(x, y, 0);
+                tempObject.scale.set(1, 1, 1);  // Always show all cells
+                tempObject.updateMatrix();
+                meshRef.current.setMatrixAt(i, tempObject.matrix);
+                tempColor.setHSL(0.3, 1, cellsData[i] * 0.5);  // Adjust color based on cell state
+                meshRef.current.setColorAt(i, tempColor);
+            }
+            meshRef.current.instanceMatrix.needsUpdate = true;
+            if (meshRef.current.instanceColor) meshRef.current.instanceColor.needsUpdate = true;
+        },
+        [gridSize, cellSize, cells]
+    );
 
     useEffect(() => {
         if (cells.every(cell => cell === 0)) {
@@ -215,6 +206,7 @@ const GameOfLife: React.FC<GameOfLifeProps> = ({
 
     return (
         <instancedMesh
+            key={gridSize}
             ref={meshRef}
             args={[undefined, undefined, gridSize * gridSize]}
             onPointerMove={handlePointerMove}

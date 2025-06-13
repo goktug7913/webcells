@@ -1,5 +1,5 @@
 {
-  "name": "webgraphs",
+  "name": "webcells",
   "version": "0.1.0",
   "private": true,
   "scripts": {
@@ -9,17 +9,19 @@
     "lint": "next lint"
   },
   "dependencies": {
-    "@react-three/drei": "^9.114.0",
-    "next": "14.2.14",
-    "react": "^18",
-    "react-dom": "^18"
+    "@react-three/drei": "^10.2.0",
+    "next": "15.3.3",
+    "react": "^19",
+    "react-dom": "^19"
   },
   "devDependencies": {
-    "@types/node": "^20",
-    "@types/react": "^18",
-    "@types/react-dom": "^18",
-    "eslint": "^8",
-    "eslint-config-next": "14.2.14",
+    "@types/node": "^24",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "@typescript-eslint/eslint-plugin": "^8.34.0",
+    "@typescript-eslint/parser": "^8.34.0",
+    "eslint": "^9",
+    "eslint-config-next": "15.3.3",
     "typescript": "^5"
   }
 }

@@ -27,20 +27,22 @@ const EntropyGraph: React.FC<EntropyGraphProps> = ({ entropyHistory }) => {
     ctx.lineWidth = 2;
     ctx.beginPath();
 
-    const step = width / (entropyHistory.length - 1);
-    entropyHistory.forEach((entropy, index) => {
-      const x = index * step;
-      const y = height - (entropy * height);
-      if (index === 0) {
-        ctx.moveTo(x, y);
-      } else {
-        ctx.lineTo(x, y);
-      }
-    });
+    // Avoid division by zero when there's less than two points
+    if (entropyHistory.length > 1) {
+      const step = width / (entropyHistory.length - 1);
+      entropyHistory.forEach((entropy, index) => {
+        const x = index * step;
+        const y = height - entropy * height;
+        if (index === 0) {
+          ctx.moveTo(x, y);
+        } else {
+          ctx.lineTo(x, y);
+        }
+      });
+      ctx.stroke();
+    }
 
-    ctx.stroke();
-
-    // Draw grid lines
+    // Draw grid lines (these should always render)
     ctx.strokeStyle = '#003300';
     ctx.lineWidth = 1;
     for (let i = 1; i < 4; i++) {

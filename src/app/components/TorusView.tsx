@@ -60,7 +60,11 @@ const TorusView: React.FC<TorusViewProps> = ({ cells, gridSize, hoveredCell }) =
   return (
     <>
       <OrbitControls enableZoom={true} enablePan={true} enableRotate={true} />
-      <instancedMesh ref={meshRef} args={[undefined, undefined, cells.length]}>
+      <instancedMesh
+        key={cells.length}
+        ref={meshRef}
+        args={[undefined, undefined, cells.length]}
+      >
         <sphereGeometry args={[1, 16, 16]} />
         <meshBasicMaterial />
       </instancedMesh>
