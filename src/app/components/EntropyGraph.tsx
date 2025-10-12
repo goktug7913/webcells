@@ -53,13 +53,13 @@ const EntropyGraph: React.FC<EntropyGraphProps> = ({ entropyHistory }) => {
       ctx.stroke();
     }
 
-    // Add labels
+    // Add labels (avoid overlap with a small x offset)
     ctx.fillStyle = '#00ff00';
     ctx.font = '12px monospace';
     ctx.fillText('Entropy', 5, 15);
-    ctx.fillText('1.0', 5, 15);
-    ctx.fillText('0.5', 5, height / 2 + 5);
-    ctx.fillText('0.0', 5, height - 5);
+    ctx.fillText('1.0', 70, 15);
+    ctx.fillText('0.5', 70, height / 2 + 5);
+    ctx.fillText('0.0', 70, height - 5);
 
   }, [entropyHistory]);
 

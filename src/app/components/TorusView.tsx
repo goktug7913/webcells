@@ -1,10 +1,10 @@
-import React, { useMemo, useRef } from 'react';
+import React, { useEffect, useMemo, useRef } from 'react';
 import { useFrame } from '@react-three/fiber';
 import { OrbitControls } from '@react-three/drei';
 import * as THREE from 'three';
 
 interface TorusViewProps {
-  cells: number[];
+  cells: Float32Array;
   gridSize: number;
   hoveredCell: { x: number; y: number } | null;
 }
@@ -16,9 +16,9 @@ const TorusView: React.FC<TorusViewProps> = ({ cells, gridSize, hoveredCell }) =
   const dummy = useMemo(() => new THREE.Object3D(), []);
   const color = useMemo(() => new THREE.Color(), []);
 
-  useFrame(() => {
+  // Update instances only when cells or gridSize change
+  useEffect(() => {
     if (!meshRef.current) return;
-
     for (let i = 0; i < cells.length; i++) {
       const x = (i % gridSize) / gridSize;
       const y = Math.floor(i / gridSize) / gridSize;
@@ -29,30 +29,32 @@ const TorusView: React.FC<TorusViewProps> = ({ cells, gridSize, hoveredCell }) =
         0.3 * Math.sin(x * Math.PI * 2)
       );
 
-      dummy.scale.setScalar(cells[i] ? 0.015 : 0.005);
+      dummy.scale.setScalar(cells[i] > 0.5 ? 0.015 : 0.005);
       dummy.updateMatrix();
 
       meshRef.current.setMatrixAt(i, dummy.matrix);
-      color.setHSL(cells[i] ? 0.3 : 0, 1, 0.5);
+      color.setHSL(cells[i] > 0.5 ? 0.3 : 0, 1, 0.5);
       meshRef.current.setColorAt(i, color);
     }
 
     meshRef.current.instanceMatrix.needsUpdate = true;
     if (meshRef.current.instanceColor) meshRef.current.instanceColor.needsUpdate = true;
+  }, [cells, gridSize, dummy, color]);
 
-    // Update highlight position
-    if (highlightRef.current && hoveredCell) {
+  // Update highlight every frame based on hovered cell for responsiveness
+  useFrame(() => {
+    if (!highlightRef.current) return;
+    if (hoveredCell) {
       const { x, y } = hoveredCell;
       const xPos = x / gridSize;
       const yPos = y / gridSize;
-
       highlightRef.current.position.set(
         (1 + 0.3 * Math.cos(xPos * Math.PI * 2)) * Math.cos(yPos * Math.PI * 2),
         (1 + 0.3 * Math.cos(xPos * Math.PI * 2)) * Math.sin(yPos * Math.PI * 2),
         0.3 * Math.sin(xPos * Math.PI * 2)
       );
       highlightRef.current.visible = true;
-    } else if (highlightRef.current) {
+    } else {
       highlightRef.current.visible = false;
     }
   });

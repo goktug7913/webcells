@@ -13,19 +13,31 @@ import { InitialConfigType } from './components/InitialConfigTool';
 
 export default function Home() {
   const [entropyHistory, setEntropyHistory] = useState<number[]>([]);
-  const [gridSize, setGridSize] = useState(100);
-  const [speed, setSpeed] = useState(10);
-  const [cells, setCells] = useState<number[]>([]);  // Changed from boolean[] to number[]
+  const [gridSize, setGridSize] = useState(128);
+  const [isRunning, setIsRunning] = useState(true);
+  const [cells, setCells] = useState<Float32Array>(new Float32Array(0));
   const [stats, setStats] = useState({ entropy: 0, aliveRatio: 0, patternComplexity: 0, spatialEntropy: 0 });
-  const [initialConfig, setInitialConfig] = useState<InitialConfigType>('random');
+  const [initialConfig, setInitialConfig] = useState<InitialConfigType>(InitialConfigType.Random);
   const [hoveredCell, setHoveredCell] = useState<{ x: number; y: number } | null>(null);
   const [injectEntropyFn, setInjectEntropyFn] = useState<() => void>(() => {});
+  
+  // Smooth Life parameters
+  const [innerR, setInnerR] = useState(1.0);
+  const [outerR, setOuterR] = useState(3.2);
+  const [alpha_m, setAlpha_m] = useState(0.028);
+  const [alpha_n, setAlpha_n] = useState(0.147);
+  const [b1, setB1] = useState(0.22);
+  const [b2, setB2] = useState(0.305);
+  const [d1, setD1] = useState(0.2);
+  const [d2, setD2] = useState(0.4);
+  const [dt, setDt] = useState(0.1);
+  const [autoReinit, setAutoReinit] = useState(false);
 
   const handleEntropyChange = useCallback((entropy: number) => {
     setEntropyHistory(prev => [...prev, entropy].slice(-100));
   }, []);
 
-  const handleCellsUpdate = useCallback((newCells: number[]) => {  // Changed from boolean[] to number[]
+  const handleCellsUpdate = useCallback((newCells: Float32Array) => {
     setCells(newCells);
   }, []);
 
@@ -56,9 +68,29 @@ export default function Home() {
           <ControlPanel
             gridSize={gridSize}
             setGridSize={setGridSize}
-            speed={speed}
-            setSpeed={setSpeed}
+            isRunning={isRunning}
+            setIsRunning={setIsRunning}
             onInjectEntropy={handleInjectEntropy}
+            innerR={innerR}
+            setInnerR={setInnerR}
+            outerR={outerR}
+            setOuterR={setOuterR}
+            alpha_m={alpha_m}
+            setAlpha_m={setAlpha_m}
+            alpha_n={alpha_n}
+            setAlpha_n={setAlpha_n}
+            b1={b1}
+            setB1={setB1}
+            b2={b2}
+            setB2={setB2}
+            d1={d1}
+            setD1={setD1}
+            d2={d2}
+            setD2={setD2}
+            dt={dt}
+            setDt={setDt}
+            autoReinit={autoReinit}
+            setAutoReinit={setAutoReinit}
           />
           <InitialConfigTool onConfigurationSet={handleInitialConfigSet} />
         </div>
@@ -69,13 +101,23 @@ export default function Home() {
               <OrthographicCamera makeDefault position={[0, 0, 10]} zoom={40} />
               <GameOfLife
                 gridSize={gridSize}
-                speed={speed}
+                isRunning={isRunning}
                 onEntropyChange={handleEntropyChange}
                 onCellsUpdate={handleCellsUpdate}
                 onStatsUpdate={handleStatsUpdate}
                 initialConfig={initialConfig}
                 onHover={handleHover}
                 onInjectEntropy={(fn: () => void) => setInjectEntropyFn(() => fn)}
+                innerR={innerR}
+                outerR={outerR}
+                alpha_m={alpha_m}
+                alpha_n={alpha_n}
+                b1={b1}
+                b2={b2}
+                d1={d1}
+                d2={d2}
+                dt={dt}
+                autoReinit={autoReinit}
               />
             </Canvas>
           </div>

@@ -5,8 +5,8 @@ import { Inter } from 'next/font/google'
 const inter = Inter({ subsets: ['latin'] })
 
 export const metadata: Metadata = {
-  title: 'Game of Life',
-  description: 'Conway\'s Game of Life implemented with React Three Fiber',
+  title: 'Cellspace',
+  description: 'Cellspace is a sandbox for exploring continuous cellular automata on a toroidal topology.',
 }
 
 export default function RootLayout({

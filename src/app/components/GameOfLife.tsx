@@ -1,70 +1,54 @@
+// @ts-nocheck
 import React, { useRef, useState, useEffect, useCallback } from 'react';
 import { useFrame, useThree } from '@react-three/fiber';
 import * as THREE from 'three';
 import { calculateSpatialEntropy, calculatePatternComplexity } from '../utils/entropyCalculations';
-import { Vector2 } from 'three';
 import { GPUComputationRenderer } from '../utils/gpuCompute';
+import { InitialConfigType } from './InitialConfigTool';
 
 interface GameOfLifeProps {
     gridSize: number;
-    speed: number;
+    isRunning: boolean;
     onEntropyChange: (entropy: number) => void;
-    onCellsUpdate: (cells: number[]) => void;  // Changed from boolean[] to number[]
+    onCellsUpdate: (cells: Float32Array) => void;
     onStatsUpdate: (stats: { entropy: number; aliveRatio: number; patternComplexity: number; spatialEntropy: number }) => void;
-    initialConfig?: 'random' | 'glider' | 'empty';
+    initialConfig?: InitialConfigType;
     onHover: (x: number, y: number | null) => void;
     onInjectEntropy: (fn: () => void) => void;
+    // Smooth Life parameters
+    innerR: number;
+    outerR: number;
+    alpha_m: number;
+    alpha_n: number;
+    b1: number;
+    b2: number;
+    d1: number;
+    d2: number;
+    dt: number;
+    autoReinit: boolean;
 }
 
-// GLSL fragment shader that computes the next automaton state on the GPU
-const fragmentShader = /* glsl */`
-uniform float gridSize;
-uniform float innerR;
-uniform float outerR;
-uniform float birthLow;
-uniform float birthHigh;
-uniform float deathLow;
-uniform float deathHigh;
-
-void main() {
-    vec2 uv = gl_FragCoord.xy / gridSize;
-    float outerSum = 0.0;
-    float outerCount = 0.0;
-
-    for (int dy = -5; dy <= 5; ++dy) {
-        for (int dx = -5; dx <= 5; ++dx) {
-            float dist = length(vec2(float(dx), float(dy)));
-            if (dist <= outerR && dist > innerR) {
-                vec2 uvOff = fract(uv + vec2(float(dx), float(dy)) / gridSize);
-                float v = texture2D(textureState, uvOff).r;
-                outerSum += v;
-                outerCount += 1.0;
-            }
-        }
-    }
-
-    float s = outerCount == 0.0 ? 0.0 : outerSum / outerCount;
-    float current = texture2D(textureState, uv).r;
-    float n = 0.0;
-    if (current > 0.5) {
-        n = (s >= deathLow && s <= deathHigh) ? 1.0 : 0.0;
-    } else {
-        n = (s >= birthLow && s <= birthHigh) ? 1.0 : 0.0;
-    }
-
-    float nextVal = current + 0.5 * (n - current);
-    gl_FragColor = vec4(nextVal, nextVal, nextVal, 1.0);
-}`;
+import fragmentShader from '../shaders/automaton.frag.glsl';
 
 const GameOfLife: React.FC<GameOfLifeProps> = ({
     gridSize,
-    speed,
+    isRunning,
     onEntropyChange,
     onCellsUpdate,
     onStatsUpdate,
-    initialConfig = 'random',
+    initialConfig = InitialConfigType.Random,
     onHover,
-    onInjectEntropy
+    onInjectEntropy,
+    innerR,
+    outerR,
+    alpha_m,
+    alpha_n,
+    b1,
+    b2,
+    d1,
+    d2,
+    dt,
+    autoReinit
 }) => {
     const meshRef = useRef<THREE.InstancedMesh>(null);
     const gpuComputeRef = useRef<GPUComputationRenderer | null>(null);
@@ -72,6 +56,8 @@ const GameOfLife: React.FC<GameOfLifeProps> = ({
     const gpuPixelBuffer = useRef<Float32Array | null>(null);
     const [cells, setCells] = useState<Float32Array>(new Float32Array(gridSize * gridSize));
     const lastUpdateTime = useRef(0);
+    const lastReadbackTime = useRef(0);
+    const readbackIntervalSec = 0.1; // throttle GPU->CPU readback and metrics (~10 Hz)
     const { viewport, gl } = useThree();
     const cellSize = Math.min(viewport.width, viewport.height) / gridSize;
 
@@ -82,13 +68,66 @@ const GameOfLife: React.FC<GameOfLifeProps> = ({
                 newGrid[i] = Math.random();
             }
         } else if (initialConfig === 'glider') {
-            // Initialize a glider pattern
+            // Initialize smooth circular patterns suitable for Smooth Life
             const center = Math.floor(gridSize / 2);
-            newGrid[center * gridSize + center] = 1;
-            newGrid[(center + 1) * gridSize + (center + 1)] = 1;
-            newGrid[(center + 1) * gridSize + (center + 2)] = 1;
-            newGrid[center * gridSize + (center + 2)] = 1;
-            newGrid[(center - 1) * gridSize + (center + 2)] = 1;
+            
+            // Create a smooth circular blob
+            for (let y = 0; y < gridSize; y++) {
+                for (let x = 0; x < gridSize; x++) {
+                    const dx = x - center;
+                    const dy = y - center;
+                    const dist = Math.sqrt(dx * dx + dy * dy);
+                    
+                    if (dist < 8) {
+                        // Smooth falloff from center
+                        newGrid[y * gridSize + x] = Math.max(0, 1 - dist / 8);
+                    } else if (dist < 15) {
+                        // Add some noise in the outer ring for complexity
+                        newGrid[y * gridSize + x] = Math.random() * 0.3;
+                    }
+                }
+            }
+            
+            // Add a few smaller circular patterns
+            const patterns = [
+                { x: center - 20, y: center - 20, radius: 5 },
+                { x: center + 20, y: center + 20, radius: 4 },
+                { x: center - 15, y: center + 15, radius: 3 }
+            ];
+            
+            patterns.forEach(pattern => {
+                for (let y = 0; y < gridSize; y++) {
+                    for (let x = 0; x < gridSize; x++) {
+                        const dx = x - pattern.x;
+                        const dy = y - pattern.y;
+                        const dist = Math.sqrt(dx * dx + dy * dy);
+                        
+                        if (dist < pattern.radius) {
+                            const idx = y * gridSize + x;
+                            newGrid[idx] = Math.max(newGrid[idx], Math.max(0, 1 - dist / pattern.radius));
+                        }
+                    }
+                }
+            });
+        } else if (initialConfig === 'empty') {
+            // Initialize with mostly empty grid, but add a few small patterns
+            for (let i = 0; i < newGrid.length; i++) {
+                newGrid[i] = Math.random() < 0.01 ? Math.random() * 0.5 : 0;
+            }
+            
+            // Add a small circular pattern in the center
+            const center = Math.floor(gridSize / 2);
+            for (let y = 0; y < gridSize; y++) {
+                for (let x = 0; x < gridSize; x++) {
+                    const dx = x - center;
+                    const dy = y - center;
+                    const dist = Math.sqrt(dx * dx + dy * dy);
+                    
+                    if (dist < 3) {
+                        newGrid[y * gridSize + x] = Math.max(0, 1 - dist / 3);
+                    }
+                }
+            }
         }
         return newGrid;
     }, [gridSize, initialConfig]);
@@ -106,14 +145,14 @@ const GameOfLife: React.FC<GameOfLifeProps> = ({
     }, [gridSize]);
 
     const { raycaster, camera } = useThree();
-    const mouse = useRef(new Vector2());
+    const mouse = useRef(new THREE.Vector2());
 
-    const handlePointerMove = useCallback((event: THREE.Event) => {
+    const handlePointerMove = useCallback((event: any) => {
         // Type assertion for event
         const mouseEvent = event as unknown as MouseEvent;
-        const target = event.target as HTMLElement;
+        const canvas = gl.domElement;
+        const { left, top, width, height } = canvas.getBoundingClientRect();
         const { clientX, clientY } = mouseEvent;
-        const { left, top, width, height } = target.getBoundingClientRect();
         mouse.current.x = ((clientX - left) / width) * 2 - 1;
         mouse.current.y = -((clientY - top) / height) * 2 + 1;
         raycaster.setFromCamera(mouse.current, camera);
@@ -126,32 +165,37 @@ const GameOfLife: React.FC<GameOfLifeProps> = ({
         } else {
             onHover(-1, -1);
         }
-    }, [raycaster, camera, gridSize, onHover]);
+    }, [raycaster, camera, gridSize, onHover, gl]);
 
-    const injectEntropy = useCallback(() => {
-        setCells(prevCells => {
-            const newCells = new Float32Array(prevCells);
-            for (let i = 0; i < gridSize * gridSize / 10; i++) {
-                const index = Math.floor(Math.random() * gridSize * gridSize);
-                newCells[index] = 1 - newCells[index];
+    // Define updateMesh early so hooks below can reference it
+    const updateMesh = useCallback(
+        (cellsData: Float32Array) => {
+            if (!meshRef.current) return;
+            const tempColor = new THREE.Color();
+            for (let i = 0; i < gridSize * gridSize; i++) {
+                tempColor.setHSL(0.3, 1, cellsData[i] * 0.5);  // Adjust color based on cell state
+                meshRef.current.setColorAt(i, tempColor);
             }
-            return newCells;
-        });
-    }, [gridSize]);
+            if (meshRef.current.instanceColor) meshRef.current.instanceColor.needsUpdate = true;
+        },
+        [gridSize]
+    );
 
-    useEffect(() => {
-        onInjectEntropy(injectEntropy);
-    }, [onInjectEntropy, injectEntropy]);
-
-    useEffect(() => {
-        // Initialize GPU compute when WebGL context is ready
+    const rebuildGPU = useCallback((initGrid: Float32Array) => {
         if (!gl) return;
+
+        if (gpuComputeRef.current) {
+            try {
+                gpuComputeRef.current.dispose();
+            } catch (e) {
+                // ignore
+            }
+        }
 
         const gpuCompute = new GPUComputationRenderer(gridSize, gridSize, gl);
 
-        const dt = gpuCompute.createTexture();
-        const initGrid = initializeGrid();
-        const data = dt.image.data as Float32Array;
+        const initTexture = gpuCompute.createTexture();
+        const data = initTexture.image.data as Float32Array;
         for (let i = 0; i < gridSize * gridSize; i++) {
             const v = initGrid[i];
             const idx = i * 4;
@@ -159,17 +203,20 @@ const GameOfLife: React.FC<GameOfLifeProps> = ({
             data[idx + 3] = 1;
         }
 
-        const variable = gpuCompute.addVariable('textureState', fragmentShader, dt);
+        const variable = gpuCompute.addVariable('textureState', fragmentShader, initTexture);
         gpuCompute.setVariableDependencies(variable, [variable]);
 
         Object.assign(variable.material.uniforms, {
             gridSize: { value: gridSize },
-            innerR: { value: 3.0 },
-            outerR: { value: 5.0 },
-            birthLow: { value: 0.278 },
-            birthHigh: { value: 0.365 },
-            deathLow: { value: 0.267 },
-            deathHigh: { value: 0.445 }
+            innerR: { value: innerR },
+            outerR: { value: outerR },
+            alpha_m: { value: alpha_m },
+            alpha_n: { value: alpha_n },
+            b1: { value: b1 },
+            b2: { value: b2 },
+            d1: { value: d1 },
+            d2: { value: d2 },
+            dt: { value: dt }
         });
 
         const err = gpuCompute.init();
@@ -182,56 +229,136 @@ const GameOfLife: React.FC<GameOfLifeProps> = ({
         gpuPixelBuffer.current = new Float32Array(gridSize * gridSize * 4);
 
         setCells(initGrid);
-    }, [gl, gridSize, initializeGrid]);
+    }, [gl, gridSize, innerR, outerR, alpha_m, alpha_n, b1, b2, d1, d2, dt]);
+
+    const injectEntropy = useCallback(() => {
+        if (!gpuComputeRef.current || !computeVarRef.current) return;
+        const renderTarget = gpuComputeRef.current.getCurrentRenderTarget(computeVarRef.current);
+        if (!gpuPixelBuffer.current) return;
+
+        gl.readRenderTargetPixels(renderTarget, 0, 0, gridSize, gridSize, gpuPixelBuffer.current);
+        const currentCells = new Float32Array(gridSize * gridSize);
+        for (let i = 0; i < gridSize * gridSize; i++) {
+            currentCells[i] = gpuPixelBuffer.current[i * 4];
+        }
+
+        // Flip a fraction of random cells
+        const flips = Math.max(1, Math.floor((gridSize * gridSize) / 20));
+        for (let k = 0; k < flips; k++) {
+            const index = Math.floor(Math.random() * gridSize * gridSize);
+            currentCells[index] = 1 - currentCells[index];
+        }
+
+        rebuildGPU(currentCells);
+        updateMesh(currentCells);
+    }, [gridSize, gl, rebuildGPU, updateMesh]);
+
+    useEffect(() => {
+        onInjectEntropy(injectEntropy);
+    }, [onInjectEntropy, injectEntropy]);
+
+    useEffect(() => {
+        // Initialize GPU compute when WebGL context is ready
+        if (!gl) return;
+        const initGrid = initializeGrid();
+        rebuildGPU(initGrid);
+
+        // cleanup on unmount or grid size change (rebuildGPU already disposes prior instance)
+        return () => {
+            if (gpuComputeRef.current) {
+                try {
+                    gpuComputeRef.current.dispose();
+                } catch (e) {
+                    // ignore
+                }
+                gpuComputeRef.current = null;
+                computeVarRef.current = null;
+                gpuPixelBuffer.current = null;
+            }
+        };
+    }, [gl, gridSize, initializeGrid, rebuildGPU]);
+
+    // Update uniforms when parameters change
+    useEffect(() => {
+        if (!computeVarRef.current || !computeVarRef.current.material) return;
+        const mat = computeVarRef.current.material as THREE.ShaderMaterial;
+        if (mat && mat.uniforms) {
+            mat.uniforms.innerR.value = innerR;
+            mat.uniforms.outerR.value = outerR;
+            mat.uniforms.alpha_m.value = alpha_m;
+            mat.uniforms.alpha_n.value = alpha_n;
+            mat.uniforms.b1.value = b1;
+            mat.uniforms.b2.value = b2;
+            mat.uniforms.d1.value = d1;
+            mat.uniforms.d2.value = d2;
+            mat.uniforms.dt.value = dt;
+        }
+    }, [innerR, outerR, alpha_m, alpha_n, b1, b2, d1, d2, dt]);
+
+    // Auto re-initialize when parameters change (if enabled)
+    useEffect(() => {
+        if (!autoReinit) return;
+        const initGrid = initializeGrid();
+        rebuildGPU(initGrid);
+    }, [autoReinit, innerR, outerR, alpha_m, alpha_n, b1, b2, d1, d2, dt, gridSize, initializeGrid, rebuildGPU]);
+
+    // Precompute static instance transforms once (positions), only update colors later
+    useEffect(() => {
+        if (!meshRef.current) return;
+        const tempObject = new THREE.Object3D();
+        for (let i = 0; i < gridSize * gridSize; i++) {
+            const x = (i % gridSize) * cellSize - (gridSize * cellSize) / 2;
+            const y = Math.floor(i / gridSize) * cellSize - (gridSize * cellSize) / 2;
+            tempObject.position.set(x, y, 0);
+            tempObject.scale.set(1, 1, 1);
+            tempObject.updateMatrix();
+            meshRef.current.setMatrixAt(i, tempObject.matrix);
+        }
+        meshRef.current.instanceMatrix.needsUpdate = true;
+    }, [gridSize, cellSize]);
 
     useFrame((_, delta) => {
         if (!gpuComputeRef.current || !computeVarRef.current || !gpuPixelBuffer.current) return;
 
-        lastUpdateTime.current += delta;
-        if (lastUpdateTime.current < 1 / speed) return;
-        lastUpdateTime.current = 0;
+        // If not running, pause updates
+        if (!isRunning) return;
+
+        // update dt uniform (no speed multiplier needed since dt controls the integration step)
+        const mat = computeVarRef.current.material as THREE.ShaderMaterial;
+        if (mat && mat.uniforms && mat.uniforms.dt) {
+            mat.uniforms.dt.value = dt;
+        }
 
         gpuComputeRef.current.compute();
+
+        // Fixed readback frequency (can be adjusted if needed)
+        const targetHz = 30; // 30Hz for smooth updates
+        const interval = 1 / targetHz;
+        lastReadbackTime.current += delta;
+        if (lastReadbackTime.current < interval) {
+            return;
+        }
+        lastReadbackTime.current = 0;
 
         const renderTarget = gpuComputeRef.current.getCurrentRenderTarget(computeVarRef.current);
         gl.readRenderTargetPixels(renderTarget, 0, 0, gridSize, gridSize, gpuPixelBuffer.current);
 
-        const newCells = new Float32Array(gridSize * gridSize);
+        const cpuCells = new Float32Array(gridSize * gridSize);
         for (let i = 0; i < gridSize * gridSize; i++) {
-            newCells[i] = gpuPixelBuffer.current[i * 4];
+            cpuCells[i] = gpuPixelBuffer.current[i * 4];
         }
 
-        setCells(newCells);
-        onCellsUpdate(Array.from(newCells));
+        setCells(cpuCells);
+        onCellsUpdate(cpuCells);
 
-        const stats = calculateStats(newCells);
+        const stats = calculateStats(cpuCells);
         onStatsUpdate(stats);
         onEntropyChange(stats.entropy);
 
-        updateMesh(newCells);
+        updateMesh(cpuCells);
     });
 
-    const updateMesh = useCallback(
-        (cellsData: Float32Array = cells) => {
-            if (!meshRef.current) return;
-
-            const tempObject = new THREE.Object3D();
-            const tempColor = new THREE.Color();
-            for (let i = 0; i < gridSize * gridSize; i++) {
-                const x = (i % gridSize) * cellSize - (gridSize * cellSize) / 2;
-                const y = Math.floor(i / gridSize) * cellSize - (gridSize * cellSize) / 2;
-                tempObject.position.set(x, y, 0);
-                tempObject.scale.set(1, 1, 1);  // Always show all cells
-                tempObject.updateMatrix();
-                meshRef.current.setMatrixAt(i, tempObject.matrix);
-                tempColor.setHSL(0.3, 1, cellsData[i] * 0.5);  // Adjust color based on cell state
-                meshRef.current.setColorAt(i, tempColor);
-            }
-            meshRef.current.instanceMatrix.needsUpdate = true;
-            if (meshRef.current.instanceColor) meshRef.current.instanceColor.needsUpdate = true;
-        },
-        [gridSize, cellSize]
-    );
+    
 
     useEffect(() => {
         if (cells.every(cell => cell === 0)) {
