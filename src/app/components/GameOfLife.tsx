@@ -1,6 +1,6 @@
-// @ts-nocheck
 import React, { useRef, useState, useEffect, useCallback } from 'react';
 import { useFrame, useThree } from '@react-three/fiber';
+import type { ThreeEvent } from '@react-three/fiber';
 import * as THREE from 'three';
 import { calculateSpatialEntropy, calculatePatternComplexity } from '../utils/entropyCalculations';
 import { GPUComputationRenderer } from '../utils/gpuCompute';
@@ -15,6 +15,7 @@ interface GameOfLifeProps {
     initialConfig?: InitialConfigType;
     onHover: (x: number, y: number | null) => void;
     onInjectEntropy: (fn: () => void) => void;
+    entropyStrength: number;
     // Smooth Life parameters
     innerR: number;
     outerR: number;
@@ -30,6 +31,8 @@ interface GameOfLifeProps {
 
 import fragmentShader from '../shaders/automaton.frag.glsl';
 
+type ComputeVariable = ReturnType<GPUComputationRenderer['addVariable']>;
+
 const GameOfLife: React.FC<GameOfLifeProps> = ({
     gridSize,
     isRunning,
@@ -39,6 +42,7 @@ const GameOfLife: React.FC<GameOfLifeProps> = ({
     initialConfig = InitialConfigType.Random,
     onHover,
     onInjectEntropy,
+    entropyStrength,
     innerR,
     outerR,
     alpha_m,
@@ -52,12 +56,10 @@ const GameOfLife: React.FC<GameOfLifeProps> = ({
 }) => {
     const meshRef = useRef<THREE.InstancedMesh>(null);
     const gpuComputeRef = useRef<GPUComputationRenderer | null>(null);
-    const computeVarRef = useRef<any>(null);
+    const computeVarRef = useRef<ComputeVariable | null>(null);
     const gpuPixelBuffer = useRef<Float32Array | null>(null);
     const [cells, setCells] = useState<Float32Array>(new Float32Array(gridSize * gridSize));
-    const lastUpdateTime = useRef(0);
     const lastReadbackTime = useRef(0);
-    const readbackIntervalSec = 0.1; // throttle GPU->CPU readback and metrics (~10 Hz)
     const { viewport, gl } = useThree();
     const cellSize = Math.min(viewport.width, viewport.height) / gridSize;
 
@@ -147,7 +149,7 @@ const GameOfLife: React.FC<GameOfLifeProps> = ({
     const { raycaster, camera } = useThree();
     const mouse = useRef(new THREE.Vector2());
 
-    const handlePointerMove = useCallback((event: any) => {
+    const handlePointerMove = useCallback((event: ThreeEvent<PointerEvent>) => {
         // Type assertion for event
         const mouseEvent = event as unknown as MouseEvent;
         const canvas = gl.domElement;
@@ -229,7 +231,7 @@ const GameOfLife: React.FC<GameOfLifeProps> = ({
         gpuPixelBuffer.current = new Float32Array(gridSize * gridSize * 4);
 
         setCells(initGrid);
-    }, [gl, gridSize, innerR, outerR, alpha_m, alpha_n, b1, b2, d1, d2, dt]);
+    }, [gl, gridSize]);
 
     const injectEntropy = useCallback(() => {
         if (!gpuComputeRef.current || !computeVarRef.current) return;
@@ -242,8 +244,10 @@ const GameOfLife: React.FC<GameOfLifeProps> = ({
             currentCells[i] = gpuPixelBuffer.current[i * 4];
         }
 
-        // Flip a fraction of random cells
-        const flips = Math.max(1, Math.floor((gridSize * gridSize) / 20));
+        // Flip a fraction of random cells based on entropyStrength (0..1)
+        const baseFraction = 1 / 20; // 5%
+        const fraction = Math.max(0, Math.min(1, entropyStrength)) * baseFraction;
+        const flips = Math.max(1, Math.floor((gridSize * gridSize) * fraction));
         for (let k = 0; k < flips; k++) {
             const index = Math.floor(Math.random() * gridSize * gridSize);
             currentCells[index] = 1 - currentCells[index];
@@ -251,7 +255,7 @@ const GameOfLife: React.FC<GameOfLifeProps> = ({
 
         rebuildGPU(currentCells);
         updateMesh(currentCells);
-    }, [gridSize, gl, rebuildGPU, updateMesh]);
+    }, [gridSize, gl, rebuildGPU, updateMesh, entropyStrength]);
 
     useEffect(() => {
         onInjectEntropy(injectEntropy);

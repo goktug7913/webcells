@@ -32,6 +32,7 @@ export default function Home() {
   const [d2, setD2] = useState(0.4);
   const [dt, setDt] = useState(0.1);
   const [autoReinit, setAutoReinit] = useState(false);
+  const [entropyStrength, setEntropyStrength] = useState(1);
 
   const handleEntropyChange = useCallback((entropy: number) => {
     setEntropyHistory(prev => [...prev, entropy].slice(-100));
@@ -91,6 +92,8 @@ export default function Home() {
             setDt={setDt}
             autoReinit={autoReinit}
             setAutoReinit={setAutoReinit}
+            entropyStrength={entropyStrength}
+            setEntropyStrength={setEntropyStrength}
           />
           <InitialConfigTool onConfigurationSet={handleInitialConfigSet} />
         </div>
@@ -108,6 +111,7 @@ export default function Home() {
                 initialConfig={initialConfig}
                 onHover={handleHover}
                 onInjectEntropy={(fn: () => void) => setInjectEntropyFn(() => fn)}
+                entropyStrength={entropyStrength}
                 innerR={innerR}
                 outerR={outerR}
                 alpha_m={alpha_m}

@@ -7,6 +7,8 @@ interface ControlPanelProps {
   isRunning: boolean;
   setIsRunning: (running: boolean) => void;
   onInjectEntropy: () => void;
+  entropyStrength: number;
+  setEntropyStrength: (value: number) => void;
   // Smooth Life parameters
   innerR: number;
   setInnerR: (value: number) => void;
@@ -36,6 +38,8 @@ const ControlPanel: React.FC<ControlPanelProps> = ({
   isRunning,
   setIsRunning,
   onInjectEntropy,
+  entropyStrength,
+  setEntropyStrength,
   innerR,
   setInnerR,
   outerR,
@@ -81,6 +85,17 @@ const ControlPanel: React.FC<ControlPanelProps> = ({
       <button className={styles.button} onClick={onInjectEntropy}>
         Inject Entropy
       </button>
+      <label>
+        Entropy Strength: {entropyStrength.toFixed(2)}
+        <input
+          type="range"
+          min="0"
+          max="1"
+          step="0.01"
+          value={entropyStrength}
+          onChange={(e) => setEntropyStrength(Number(e.target.value))}
+        />
+      </label>
       
       <label style={{ marginTop: '15px', display: 'block' }}>
         <input
