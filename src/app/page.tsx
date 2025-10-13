@@ -1,11 +1,13 @@
 'use client';
 import { useState, useCallback } from 'react';
 import { Canvas } from "@react-three/fiber";
-import { OrthographicCamera, PerspectiveCamera } from "@react-three/drei";
+import { OrthographicCamera } from "@react-three/drei";
+import { Effects } from "@react-three/drei";
+import * as THREE from 'three';
+import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
 import GameOfLife from "./components/GameOfLife";
 import EntropyGraph from "./components/EntropyGraph";
 import ControlPanel from "./components/ControlPanel";
-import TorusView from "./components/TorusView";
 import EntropyStats from "./components/EntropyStats";
 import styles from './page.module.css';
 import InitialConfigTool from './components/InitialConfigTool';
@@ -13,12 +15,11 @@ import { InitialConfigType } from './components/InitialConfigTool';
 
 export default function Home() {
   const [entropyHistory, setEntropyHistory] = useState<number[]>([]);
-  const [gridSize, setGridSize] = useState(128);
+  const [gridSize, setGridSize] = useState(256);
   const [isRunning, setIsRunning] = useState(true);
   const [cells, setCells] = useState<Float32Array>(new Float32Array(0));
-  const [stats, setStats] = useState({ entropy: 0, aliveRatio: 0, patternComplexity: 0, spatialEntropy: 0 });
+  const [stats, setStats] = useState({ meanActivity: 0, activityVariance: 0, continuousEntropy: 0, spatialCorrelation: 0, patternComplexity: 0, spatialEntropy: 0 });
   const [initialConfig, setInitialConfig] = useState<InitialConfigType>(InitialConfigType.Random);
-  const [hoveredCell, setHoveredCell] = useState<{ x: number; y: number } | null>(null);
   const [injectEntropyFn, setInjectEntropyFn] = useState<() => void>(() => {});
   
   // Smooth Life parameters
@@ -42,7 +43,7 @@ export default function Home() {
     setCells(newCells);
   }, []);
 
-  const handleStatsUpdate = useCallback((newStats: { entropy: number; aliveRatio: number; patternComplexity: number; spatialEntropy: number }) => {
+  const handleStatsUpdate = useCallback((newStats: { meanActivity: number; activityVariance: number; continuousEntropy: number; spatialCorrelation: number; patternComplexity: number; spatialEntropy: number }) => {
     setStats(newStats);
   }, []);
 
@@ -50,13 +51,6 @@ export default function Home() {
     setInitialConfig(newConfig);
   }, []);
 
-  const handleHover = useCallback((x: number, y: number | null) => {
-    if (x >= 0 && y !== null && y >= 0) {
-      setHoveredCell({ x, y });
-    } else {
-      setHoveredCell(null);
-    }
-  }, []);
 
   const handleInjectEntropy = useCallback(() => {
     injectEntropyFn();
@@ -99,7 +93,7 @@ export default function Home() {
         </div>
         <div className={styles.centerPanel}>
           <div className={styles.canvasContainer}>
-            <Canvas>
+            <Canvas style={{ width: '100%', height: '100%' }}>
               <color attach="background" args={['#001a00']} />
               <OrthographicCamera makeDefault position={[0, 0, 10]} zoom={40} />
               <GameOfLife
@@ -109,7 +103,7 @@ export default function Home() {
                 onCellsUpdate={handleCellsUpdate}
                 onStatsUpdate={handleStatsUpdate}
                 initialConfig={initialConfig}
-                onHover={handleHover}
+                onHover={() => {}}
                 onInjectEntropy={(fn: () => void) => setInjectEntropyFn(() => fn)}
                 entropyStrength={entropyStrength}
                 innerR={innerR}
@@ -123,19 +117,15 @@ export default function Home() {
                 dt={dt}
                 autoReinit={autoReinit}
               />
+              <Effects disableGamma>
+                <primitive object={new UnrealBloomPass(new THREE.Vector2(256, 256), 0.3, 0.05, 0.2)} />
+              </Effects>
             </Canvas>
-          </div>
-          <div className={styles.graphContainer}>
-            <EntropyGraph entropyHistory={entropyHistory} />
           </div>
         </div>
         <div className={styles.rightPanel}>
-          <div className={styles.torusContainer}>
-            <Canvas>
-              <color attach="background" args={['#001a00']} />
-              <PerspectiveCamera makeDefault position={[0, 0, 3]} />
-              <TorusView cells={cells} gridSize={gridSize} hoveredCell={hoveredCell} />
-            </Canvas>
+          <div className={styles.graphContainer}>
+            <EntropyGraph entropyHistory={entropyHistory} />
           </div>
           <EntropyStats {...stats} />
         </div>

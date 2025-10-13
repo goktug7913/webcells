@@ -1,0 +1,25 @@
+.controlPanel {
+  background-color: rgba(0, 255, 0, 0.1);
+  border: 1px solid var(--border-color);
+  border-radius: 5px;
+  padding: 20px;
+  margin-bottom: 20px;
+}
+
+.controlPanel button {
+  margin-right: 10px;
+  margin-bottom: 10px;
+  padding: 8px 16px;
+  background-color: var(--accent-color);
+  color: var(--background-color);
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-family: 'Roboto Mono', monospace;
+  font-size: 14px;
+  transition: background-color 0.3s;
+}
+
+.controlPanel button:hover {
+  background-color: #00ff00;
+}

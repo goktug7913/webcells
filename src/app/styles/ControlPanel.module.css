@@ -2,19 +2,59 @@
   background-color: rgba(0, 255, 0, 0.1);
   border: 1px solid var(--border-color);
   border-radius: 5px;
-  padding: 20px;
+  padding: 15px;
   margin-bottom: 20px;
 }
 
 .control {
-  margin-bottom: 20px;
+  margin-bottom: 8px;
+}
+
+.controlRow {
+  display: flex;
+  gap: 15px;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.controlRow > * {
+  flex: 1;
+}
+
+.smoothLifeGrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px;
+}
+
+.smoothLifeGrid .control:last-child {
+  grid-column: 1 / -1;
 }
 
 .control label {
   display: block;
-  margin-bottom: 10px;
+  margin-bottom: 0px;
+  font-size: 15px;
+  font-weight: 500;
 }
 
 .control input[type="range"] {
   width: 100%;
+}
+
+.button {
+  background-color: var(--accent-color);
+  color: var(--background-color);
+  border: none;
+  padding: 10px 20px;
+  font-family: 'Roboto Mono', monospace;
+  font-size: 14px;
+  cursor: pointer;
+  transition: background-color 0.3s, transform 0.1s;
+  border-radius: 4px;
+}
+
+.button:hover {
+  background-color: #00ff00;
+  transform: translateY(-2px);
 }

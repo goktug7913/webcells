@@ -30,8 +30,8 @@
 .main {
   display: flex;
   flex-direction: column;
-  min-height: 100vh;
-  padding: 2rem;
+  height: 100vh;
+  padding: 0;
 }
 
 .title {
@@ -45,8 +45,8 @@
 .content {
   display: grid;
   grid-template-columns: 300px 1fr 300px;
-  gap: 2rem;
-  height: calc(100vh - 150px);
+  gap: 1rem;
+  height: 100vh;
 }
 
 .leftPanel,
@@ -54,23 +54,22 @@
   display: flex;
   flex-direction: column;
   gap: 1rem;
+  overflow-y: auto;
 }
 
 .centerPanel {
-  display: flex;
-  flex-direction: column;
-  gap: 1rem;
-  height: 100%;
-  align-items: center;
+  display: grid;
+  grid-template-rows: 1fr; /* only canvas */
+  gap: 0;
+  justify-items: center;
+
 }
 
-.canvasContainer,
-.torusContainer {
-  width: 100%;
-  /* fill the column's width */
+.canvasContainer {
+  width: min(100%, 100vh); /* square driven by the smaller of width or viewport height */
+  height: auto;
   max-width: 100%;
-  aspect-ratio: 1;
-  /* keep square */
+  aspect-ratio: 1; /* keep square */
   background-color: var(--panel-background);
   border-radius: 8px;
   overflow: hidden;
@@ -85,35 +84,6 @@
   box-shadow: 0 0 20px rgba(0, 255, 0, 0.2);
 }
 
-.controlPanel,
-.entropyStats {
-  background-color: var(--panel-background);
-  border-radius: 8px;
-  padding: 1rem;
-}
-
-.controlPanel label {
-  display: block;
-  margin-bottom: 0.5rem;
-  color: var(--text-color);
-}
-
-.entropyStats h2 {
-  font-size: 1.2rem;
-  margin-bottom: 0.5rem;
-  color: var(--text-color);
-}
-
-.entropyStats ul {
-  list-style-type: none;
-  padding: 0;
-}
-
-.entropyStats li {
-  font-size: 0.9rem;
-  margin-bottom: 0.3rem;
-  color: var(--text-color);
-}
 
 @media (max-width: 1200px) {
   .content {

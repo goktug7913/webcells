@@ -1,5 +1,5 @@
 import React from 'react';
-import styles from '../page.module.css';
+import styles from '../styles/InitialConfigTool.module.css';
 export enum InitialConfigType {
   Random = 'random',
   Glider = 'glider',
@@ -13,7 +13,7 @@ interface InitialConfigToolProps {
 const InitialConfigTool: React.FC<InitialConfigToolProps> = ({ onConfigurationSet }) => {
   return (
     <div className={styles.controlPanel}>
-      <h3 style={{ color: '#fff', marginBottom: '15px' }}>Initial Configuration</h3>
+      <h3 style={{ marginBottom: '15px' }}>Initial Configuration</h3>
       <button onClick={() => onConfigurationSet(InitialConfigType.Random)}>Random Noise</button>
       <button onClick={() => onConfigurationSet(InitialConfigType.Glider)}>Smooth Patterns</button>
       <button onClick={() => onConfigurationSet(InitialConfigType.Empty)}>Minimal Seed</button>

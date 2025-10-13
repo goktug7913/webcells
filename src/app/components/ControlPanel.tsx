@@ -1,5 +1,5 @@
 import React from 'react';
-import styles from '../page.module.css';
+import styles from '../styles/ControlPanel.module.css';
 
 interface ControlPanelProps {
   gridSize: number;
@@ -63,160 +63,188 @@ const ControlPanel: React.FC<ControlPanelProps> = ({
 }) => {
   return (
     <div className={styles.controlPanel}>
-      <label>
-        Grid Size: {gridSize}
-        <input
-          type="range"
-          min="10"
-          max="500"
-          value={gridSize}
-          onChange={(e) => setGridSize(Number(e.target.value))}
-        />
-      </label>
-      <label>
-        <input
-          type="checkbox"
-          checked={isRunning}
-          onChange={(e) => setIsRunning(e.target.checked)}
-          style={{ marginRight: '8px' }}
-        />
-        {isRunning ? 'Running' : 'Paused'}
-      </label>
-      <button className={styles.button} onClick={onInjectEntropy}>
-        Inject Entropy
-      </button>
-      <label>
-        Entropy Strength: {entropyStrength.toFixed(2)}
-        <input
-          type="range"
-          min="0"
-          max="1"
-          step="0.01"
-          value={entropyStrength}
-          onChange={(e) => setEntropyStrength(Number(e.target.value))}
-        />
-      </label>
+      <div className={styles.control}>
+        <label>
+          Grid Size: {gridSize}
+          <input
+            type="range"
+            min="10"
+            max="1024"
+            value={gridSize}
+            onChange={(e) => setGridSize(Number(e.target.value))}
+          />
+        </label>
+      </div>
+      <div className={styles.controlRow}>
+        <label>
+          <input
+            type="checkbox"
+            checked={isRunning}
+            onChange={(e) => setIsRunning(e.target.checked)}
+            style={{ marginRight: '8px' }}
+          />
+          {isRunning ? 'Running' : 'Paused'}
+        </label>
+        <button className={styles.button} onClick={onInjectEntropy}>
+          Inject Entropy
+        </button>
+      </div>
+      <div className={styles.control}>
+        <label>
+          Entropy Strength: {entropyStrength.toFixed(2)}
+          <input
+            type="range"
+            min="0"
+            max="1"
+            step="0.01"
+            value={entropyStrength}
+            onChange={(e) => setEntropyStrength(Number(e.target.value))}
+          />
+        </label>
+      </div>
+
+      <div className={styles.control}>
+        <label>
+          <input
+            type="checkbox"
+            checked={autoReinit}
+            onChange={(e) => setAutoReinit(e.target.checked)}
+            style={{ marginRight: '8px' }}
+          />
+          Auto Re-init on Parameter Change
+        </label>
+      </div>
       
-      <label style={{ marginTop: '15px', display: 'block' }}>
-        <input
-          type="checkbox"
-          checked={autoReinit}
-          onChange={(e) => setAutoReinit(e.target.checked)}
-          style={{ marginRight: '8px' }}
-        />
-        Auto Re-init on Parameter Change
-      </label>
-      
-      <div style={{ marginTop: '20px', borderTop: '1px solid #333', paddingTop: '20px' }}>
-        <h3 style={{ color: '#fff', marginBottom: '15px' }}>Smooth Life Parameters</h3>
-        
-        <label>
-          Inner Radius: {innerR.toFixed(1)}
-          <input
-            type="range"
-            min="1.0"
-            max="4.0"
-            step="0.1"
-            value={innerR}
-            onChange={(e) => setInnerR(Number(e.target.value))}
-          />
-        </label>
-        
-        <label>
-          Outer Radius: {outerR.toFixed(1)}
-          <input
-            type="range"
-            min="3.0"
-            max="7.0"
-            step="0.1"
-            value={outerR}
-            onChange={(e) => setOuterR(Number(e.target.value))}
-          />
-        </label>
-        
-        <label>
-          Alpha_m (Inner Smoothness): {alpha_m.toFixed(3)}
-          <input
-            type="range"
-            min="0.01"
-            max="0.2"
-            step="0.001"
-            value={alpha_m}
-            onChange={(e) => setAlpha_m(Number(e.target.value))}
-          />
-        </label>
-        
-        <label>
-          Alpha_n (Outer Smoothness): {alpha_n.toFixed(3)}
-          <input
-            type="range"
-            min="0.05"
-            max="0.5"
-            step="0.001"
-            value={alpha_n}
-            onChange={(e) => setAlpha_n(Number(e.target.value))}
-          />
-        </label>
-        
-        <label>
-          Birth Low (b1): {b1.toFixed(3)}
-          <input
-            type="range"
-            min="0.1"
-            max="0.4"
-            step="0.001"
-            value={b1}
-            onChange={(e) => setB1(Number(e.target.value))}
-          />
-        </label>
-        
-        <label>
-          Birth High (b2): {b2.toFixed(3)}
-          <input
-            type="range"
-            min="0.2"
-            max="0.5"
-            step="0.001"
-            value={b2}
-            onChange={(e) => setB2(Number(e.target.value))}
-          />
-        </label>
-        
-        <label>
-          Death Low (d1): {d1.toFixed(3)}
-          <input
-            type="range"
-            min="0.2"
-            max="0.5"
-            step="0.001"
-            value={d1}
-            onChange={(e) => setD1(Number(e.target.value))}
-          />
-        </label>
-        
-        <label>
-          Death High (d2): {d2.toFixed(3)}
-          <input
-            type="range"
-            min="0.4"
-            max="0.7"
-            step="0.001"
-            value={d2}
-            onChange={(e) => setD2(Number(e.target.value))}
-          />
-        </label>
-        
-        <label>
-          Integration Step (dt): {dt.toFixed(3)}
-          <input
-            type="range"
-            min="0.01"
-            max="0.3"
-            step="0.001"
-            value={dt}
-            onChange={(e) => setDt(Number(e.target.value))}
-          />
-        </label>
+      <div style={{ marginTop: '12px', borderTop: '1px solid #333', paddingTop: '12px' }}>
+        <h3 style={{ marginBottom: '10px', fontSize: '15px' }}>Smooth Life Parameters</h3>
+
+        <div className={styles.smoothLifeGrid}>
+          <div className={styles.control}>
+            <label>
+              rᵢ: {innerR.toFixed(1)}
+              <input
+                type="range"
+                min="1.0"
+                max="4.0"
+                step="0.1"
+                value={innerR}
+                onChange={(e) => setInnerR(Number(e.target.value))}
+              />
+            </label>
+          </div>
+
+          <div className={styles.control}>
+            <label>
+              rₒ: {outerR.toFixed(1)}
+              <input
+                type="range"
+                min="3.0"
+                max="7.0"
+                step="0.1"
+                value={outerR}
+                onChange={(e) => setOuterR(Number(e.target.value))}
+              />
+            </label>
+          </div>
+
+          <div className={styles.control}>
+            <label>
+              αₘ: {alpha_m.toFixed(3)}
+              <input
+                type="range"
+                min="0.01"
+                max="0.2"
+                step="0.001"
+                value={alpha_m}
+                onChange={(e) => setAlpha_m(Number(e.target.value))}
+              />
+            </label>
+          </div>
+
+          <div className={styles.control}>
+            <label>
+              αₙ: {alpha_n.toFixed(3)}
+              <input
+                type="range"
+                min="0.05"
+                max="0.5"
+                step="0.001"
+                value={alpha_n}
+                onChange={(e) => setAlpha_n(Number(e.target.value))}
+              />
+            </label>
+          </div>
+
+          <div className={styles.control}>
+            <label>
+              β₁: {b1.toFixed(3)}
+              <input
+                type="range"
+                min="0.1"
+                max="0.4"
+                step="0.001"
+                value={b1}
+                onChange={(e) => setB1(Number(e.target.value))}
+              />
+            </label>
+          </div>
+
+          <div className={styles.control}>
+            <label>
+              β₂: {b2.toFixed(3)}
+              <input
+                type="range"
+                min="0.2"
+                max="0.5"
+                step="0.001"
+                value={b2}
+                onChange={(e) => setB2(Number(e.target.value))}
+              />
+            </label>
+          </div>
+
+          <div className={styles.control}>
+            <label>
+              δ₁: {d1.toFixed(3)}
+              <input
+                type="range"
+                min="0.2"
+                max="0.5"
+                step="0.001"
+                value={d1}
+                onChange={(e) => setD1(Number(e.target.value))}
+              />
+            </label>
+          </div>
+
+          <div className={styles.control}>
+            <label>
+              δ₂: {d2.toFixed(3)}
+              <input
+                type="range"
+                min="0.4"
+                max="0.7"
+                step="0.001"
+                value={d2}
+                onChange={(e) => setD2(Number(e.target.value))}
+              />
+            </label>
+          </div>
+
+          <div className={styles.control}>
+            <label>
+              Δt: {dt.toFixed(3)}
+              <input
+                type="range"
+                min="0.01"
+                max="0.3"
+                step="0.001"
+                value={dt}
+                onChange={(e) => setDt(Number(e.target.value))}
+              />
+            </label>
+          </div>
+        </div>
       </div>
     </div>
   );

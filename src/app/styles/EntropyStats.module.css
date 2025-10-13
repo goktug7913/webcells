@@ -1,0 +1,81 @@
+.entropyStats {
+  background-color: var(--panel-background);
+  border-radius: 8px;
+  padding: 1rem;
+  position: relative;
+}
+
+.entropyStats h2 {
+  font-size: 1.2rem;
+  margin-bottom: 0.5rem;
+  color: var(--text-color);
+}
+
+.entropyStats ul {
+  list-style-type: none;
+  padding: 0;
+  margin: 0;
+}
+
+.entropyStats li {
+  font-size: 0.9rem;
+  margin-bottom: 0.3rem;
+  color: var(--text-color);
+  font-family: 'Roboto Mono', monospace;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.helpIcon {
+  background: none;
+  border: none;
+  color: var(--accent-color);
+  cursor: help;
+  font-size: 0.8rem;
+  font-weight: bold;
+  padding: 0 4px;
+  margin-left: 8px;
+  border-radius: 50%;
+  width: 16px;
+  height: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background-color 0.2s;
+}
+
+.helpIcon:hover {
+  background-color: var(--accent-color);
+  color: var(--background-color);
+}
+
+.tooltip {
+  position: fixed;
+  right: 320px; /* Position to the left of the metrics panel */
+  top: 50%;
+  transform: translateY(-50%);
+  background-color: var(--panel-background);
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  padding: 8px 12px;
+  font-size: 0.8rem;
+  color: var(--text-color);
+  white-space: nowrap;
+  z-index: 1000;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.5);
+  max-width: 280px;
+  word-wrap: break-word;
+  white-space: normal;
+  pointer-events: none;
+}
+
+.tooltip::before {
+  content: '';
+  position: absolute;
+  right: -5px;
+  top: 50%;
+  transform: translateY(-50%);
+  border: 5px solid transparent;
+  border-left-color: var(--border-color);
+}

@@ -2,7 +2,7 @@ import React, { useRef, useState, useEffect, useCallback } from 'react';
 import { useFrame, useThree } from '@react-three/fiber';
 import type { ThreeEvent } from '@react-three/fiber';
 import * as THREE from 'three';
-import { calculateSpatialEntropy, calculatePatternComplexity } from '../utils/entropyCalculations';
+import { calculateContinuousEntropy, calculateSpatialCorrelation, calculateActivityVariance, calculateSpatialEntropy, calculatePatternComplexity } from '../utils/entropyCalculations';
 import { GPUComputationRenderer } from '../utils/gpuCompute';
 import { InitialConfigType } from './InitialConfigTool';
 
@@ -11,7 +11,7 @@ interface GameOfLifeProps {
     isRunning: boolean;
     onEntropyChange: (entropy: number) => void;
     onCellsUpdate: (cells: Float32Array) => void;
-    onStatsUpdate: (stats: { entropy: number; aliveRatio: number; patternComplexity: number; spatialEntropy: number }) => void;
+    onStatsUpdate: (stats: { meanActivity: number; activityVariance: number; continuousEntropy: number; spatialCorrelation: number; patternComplexity: number; spatialEntropy: number }) => void;
     initialConfig?: InitialConfigType;
     onHover: (x: number, y: number | null) => void;
     onInjectEntropy: (fn: () => void) => void;
@@ -30,6 +30,8 @@ interface GameOfLifeProps {
 }
 
 import fragmentShader from '../shaders/automaton.frag.glsl';
+import displayVert from '../shaders/display.vert.glsl';
+import displayFrag from '../shaders/display.frag.glsl';
 
 type ComputeVariable = ReturnType<GPUComputationRenderer['addVariable']>;
 
@@ -54,14 +56,14 @@ const GameOfLife: React.FC<GameOfLifeProps> = ({
     dt,
     autoReinit
 }) => {
-    const meshRef = useRef<THREE.InstancedMesh>(null);
+    const meshRef = useRef<THREE.Mesh>(null);
     const gpuComputeRef = useRef<GPUComputationRenderer | null>(null);
     const computeVarRef = useRef<ComputeVariable | null>(null);
     const gpuPixelBuffer = useRef<Float32Array | null>(null);
+    const displayMaterialRef = useRef<THREE.ShaderMaterial | null>(null);
     const [cells, setCells] = useState<Float32Array>(new Float32Array(gridSize * gridSize));
     const lastReadbackTime = useRef(0);
     const { viewport, gl } = useThree();
-    const cellSize = Math.min(viewport.width, viewport.height) / gridSize;
 
     const initializeGrid = useCallback(() => {
         const newGrid = new Float32Array(gridSize * gridSize);
@@ -134,17 +136,33 @@ const GameOfLife: React.FC<GameOfLifeProps> = ({
         return newGrid;
     }, [gridSize, initialConfig]);
 
-    const calculateStats = useCallback((cellsData: Float32Array) => {
-        const aliveCells = cellsData.reduce((sum, cell) => sum + cell, 0);
-        const aliveRatio = aliveCells / (gridSize * gridSize);
-        const entropy = (aliveRatio === 0 || aliveRatio === 1)
-            ? 0
-            : -aliveRatio * Math.log2(aliveRatio) - (1 - aliveRatio) * Math.log2(1 - aliveRatio);
-        const patternComplexity = calculatePatternComplexity(Array.from(cellsData).map(Boolean), gridSize);
-        const spatialEntropy = calculateSpatialEntropy(Array.from(cellsData).map(Boolean), gridSize);
+    const calculateStats = useCallback((cellsData: Float32Array, size: number) => {
+        // Mean activity level (continuous)
+        const meanActivity = cellsData.reduce((sum, val) => sum + val, 0) / cellsData.length;
 
-        return { entropy, aliveRatio, patternComplexity, spatialEntropy };
-    }, [gridSize]);
+        // Activity variance (standard deviation)
+        const activityVariance = calculateActivityVariance(cellsData);
+
+        // Continuous entropy (information content of value distribution)
+        const continuousEntropy = calculateContinuousEntropy(cellsData);
+
+        // Spatial correlation (how similar nearby cells are)
+        const spatialCorrelation = calculateSpatialCorrelation(cellsData, size);
+
+        // Legacy metrics for comparison
+        const bools = Array.from(cellsData).map(v => v > 0.5);
+        const patternComplexity = calculatePatternComplexity(cellsData, size);
+        const spatialEntropy = calculateSpatialEntropy(cellsData, size);
+
+        return {
+            meanActivity,
+            activityVariance,
+            continuousEntropy,
+            spatialCorrelation,
+            patternComplexity,
+            spatialEntropy
+        };
+    }, []);
 
     const { raycaster, camera } = useThree();
     const mouse = useRef(new THREE.Vector2());
@@ -159,29 +177,28 @@ const GameOfLife: React.FC<GameOfLifeProps> = ({
         mouse.current.y = -((clientY - top) / height) * 2 + 1;
         raycaster.setFromCamera(mouse.current, camera);
         const intersects = raycaster.intersectObject(meshRef.current!);
-        if (intersects.length > 0 && intersects[0].instanceId !== undefined) {
-            const index = intersects[0].instanceId;
-            const x = index % gridSize;
-            const y = Math.floor(index / gridSize);
+        if (intersects.length > 0 && intersects[0].uv) {
+            const uv = intersects[0].uv;
+            const x = Math.min(gridSize - 1, Math.max(0, Math.floor(uv.x * gridSize)));
+            const y = Math.min(gridSize - 1, Math.max(0, Math.floor((1 - uv.y) * gridSize)));
             onHover(x, y);
         } else {
             onHover(-1, -1);
         }
     }, [raycaster, camera, gridSize, onHover, gl]);
 
-    // Define updateMesh early so hooks below can reference it
-    const updateMesh = useCallback(
-        (cellsData: Float32Array) => {
-            if (!meshRef.current) return;
-            const tempColor = new THREE.Color();
-            for (let i = 0; i < gridSize * gridSize; i++) {
-                tempColor.setHSL(0.3, 1, cellsData[i] * 0.5);  // Adjust color based on cell state
-                meshRef.current.setColorAt(i, tempColor);
-            }
-            if (meshRef.current.instanceColor) meshRef.current.instanceColor.needsUpdate = true;
-        },
-        [gridSize]
-    );
+    // Helper to update displayed texture after compute
+    const updateDisplayTexture = useCallback(() => {
+        if (!gpuComputeRef.current || !computeVarRef.current || !displayMaterialRef.current) return;
+        const rt = gpuComputeRef.current.getCurrentRenderTarget(computeVarRef.current);
+        const texture = rt.texture as THREE.Texture;
+        texture.minFilter = THREE.NearestFilter;
+        texture.magFilter = THREE.NearestFilter;
+        texture.generateMipmaps = false;
+        if (displayMaterialRef.current.uniforms && displayMaterialRef.current.uniforms.uTexture) {
+            displayMaterialRef.current.uniforms.uTexture.value = texture;
+        }
+    }, []);
 
     const rebuildGPU = useCallback((initGrid: Float32Array) => {
         if (!gl) return;
@@ -254,8 +271,8 @@ const GameOfLife: React.FC<GameOfLifeProps> = ({
         }
 
         rebuildGPU(currentCells);
-        updateMesh(currentCells);
-    }, [gridSize, gl, rebuildGPU, updateMesh, entropyStrength]);
+        updateDisplayTexture();
+    }, [gridSize, gl, rebuildGPU, updateDisplayTexture, entropyStrength]);
 
     useEffect(() => {
         onInjectEntropy(injectEntropy);
@@ -306,20 +323,10 @@ const GameOfLife: React.FC<GameOfLifeProps> = ({
         rebuildGPU(initGrid);
     }, [autoReinit, innerR, outerR, alpha_m, alpha_n, b1, b2, d1, d2, dt, gridSize, initializeGrid, rebuildGPU]);
 
-    // Precompute static instance transforms once (positions), only update colors later
+    // Keep display plane sized to viewport
     useEffect(() => {
-        if (!meshRef.current) return;
-        const tempObject = new THREE.Object3D();
-        for (let i = 0; i < gridSize * gridSize; i++) {
-            const x = (i % gridSize) * cellSize - (gridSize * cellSize) / 2;
-            const y = Math.floor(i / gridSize) * cellSize - (gridSize * cellSize) / 2;
-            tempObject.position.set(x, y, 0);
-            tempObject.scale.set(1, 1, 1);
-            tempObject.updateMatrix();
-            meshRef.current.setMatrixAt(i, tempObject.matrix);
-        }
-        meshRef.current.instanceMatrix.needsUpdate = true;
-    }, [gridSize, cellSize]);
+        // nothing needed here; the plane uses viewport sizes directly
+    }, [viewport.width, viewport.height]);
 
     useFrame((_, delta) => {
         if (!gpuComputeRef.current || !computeVarRef.current || !gpuPixelBuffer.current) return;
@@ -334,9 +341,10 @@ const GameOfLife: React.FC<GameOfLifeProps> = ({
         }
 
         gpuComputeRef.current.compute();
+        updateDisplayTexture();
 
-        // Fixed readback frequency (can be adjusted if needed)
-        const targetHz = 30; // 30Hz for smooth updates
+        // Throttled CPU readback for stats only
+        const targetHz = gridSize <= 128 ? 20 : gridSize <= 256 ? 8 : 1;
         const interval = 1 / targetHz;
         lastReadbackTime.current += delta;
         if (lastReadbackTime.current < interval) {
@@ -347,39 +355,58 @@ const GameOfLife: React.FC<GameOfLifeProps> = ({
         const renderTarget = gpuComputeRef.current.getCurrentRenderTarget(computeVarRef.current);
         gl.readRenderTargetPixels(renderTarget, 0, 0, gridSize, gridSize, gpuPixelBuffer.current);
 
-        const cpuCells = new Float32Array(gridSize * gridSize);
-        for (let i = 0; i < gridSize * gridSize; i++) {
-            cpuCells[i] = gpuPixelBuffer.current[i * 4];
+        // Downsample for stats to at most 128x128 to keep CPU work bounded
+        const sampleSize = Math.min(gridSize, 128);
+        const stride = Math.max(1, Math.floor(gridSize / sampleSize));
+        const sampled = new Float32Array(sampleSize * sampleSize);
+        let si = 0;
+        for (let y = 0; y < gridSize; y += stride) {
+            for (let x = 0; x < gridSize; x += stride) {
+                const idx = (y * gridSize + x) * 4;
+                sampled[si++] = gpuPixelBuffer.current[idx];
+                if (si >= sampled.length) break;
+            }
+            if (si >= sampled.length) break;
         }
 
-        setCells(cpuCells);
-        onCellsUpdate(cpuCells);
+        // Update cells state only for small grids (to support TorusView etc.)
+        if (gridSize <= 256) {
+            const fullCpu = new Float32Array(gridSize * gridSize);
+            for (let i = 0; i < gridSize * gridSize; i++) {
+                fullCpu[i] = gpuPixelBuffer.current[i * 4];
+            }
+            setCells(fullCpu);
+            onCellsUpdate(fullCpu);
+        }
 
-        const stats = calculateStats(cpuCells);
+        const stats = calculateStats(sampled, sampleSize);
         onStatsUpdate(stats);
-        onEntropyChange(stats.entropy);
+        onEntropyChange(stats.continuousEntropy);
 
-        updateMesh(cpuCells);
     });
 
     
 
     useEffect(() => {
-        if (cells.every(cell => cell === 0)) {
-            setCells(initializeGrid());
-        }
-    }, [cells, initializeGrid]);
+        // no-op: previous zero-check removed for performance
+    }, []);
 
     return (
-        <instancedMesh
-            key={gridSize}
+        <mesh
             ref={meshRef}
-            args={[undefined, undefined, gridSize * gridSize]}
             onPointerMove={handlePointerMove}
+            position={[0, 0, 0]}
         >
-            <planeGeometry args={[cellSize, cellSize]} />
-            <meshBasicMaterial />
-        </instancedMesh>
+            <planeGeometry args={[viewport.width, viewport.height]} />
+            <shaderMaterial
+                ref={displayMaterialRef}
+                args={[{
+                    uniforms: { uTexture: { value: null } },
+                    vertexShader: displayVert,
+                    fragmentShader: displayFrag
+                }]}
+            />
+        </mesh>
     );
 };
 
